@@ -2,14 +2,16 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra
 LDFLAGS = -lm
 
-TARGET = pca9685_servo
-SOURCE = src/pca9685_servo.cpp
+all: pca9685_servo pca9685_motor
 
-$(TARGET): $(SOURCE)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SOURCE) $(LDFLAGS)
+pca9685_servo: src/pca9685_servo.cpp
+	$(CXX) $(CXXFLAGS) -o pca9685_servo src/pca9685_servo.cpp $(LDFLAGS)
+
+pca9685_motor: src/pca9685_motor.cpp
+	$(CXX) $(CXXFLAGS) -o pca9685_motor src/pca9685_motor.cpp $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET)
+	rm -f pca9685_servo pca9685_motor
 
-.PHONY: clean
+.PHONY: all clean
 
