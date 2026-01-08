@@ -130,15 +130,19 @@ struct Packet
 
 static bool parsePacket(const uint8_t* buf, size_t len, Packet& out)
 {
-    if (len < sizeof(Packet)) return false;
+    if (len != sizeof(Packet)) return false;         // exactly 16 bytes
     std::memcpy(&out, buf, sizeof(Packet));
     if (std::memcmp(out.magic, "IRL1", 4) != 0) return false;
 
     out.seq = ntohl(out.seq);
-    out.steer_pm = static_cast<int16_t>(ntohs(static_cast<uint16_t>(out.steer_pm)));
-    out.power_pm = static_cast<int16_t>(ntohs(static_cast<uint16_t>(out.power_pm)));
-    out.flags = ntohs(out.flags);
-    out.reserved = ntohs(out.reserved);
+
+    uint16_t steer_u = ntohs(*reinterpret_cast<const uint16_t*>(&buf[8]));
+    uint16_t power_u = ntohs(*reinterpret_cast<const uint16_t*>(&buf[10]));
+    out.steer_pm = static_cast<int16_t>(steer_u);
+    out.power_pm = static_cast<int16_t>(power_u);
+
+    out.flags    = ntohs(*reinterpret_cast<const uint16_t*>(&buf[12]));
+    out.reserved = ntohs(*reinterpret_cast<const uint16_t*>(&buf[14]));
     return true;
 }
 
