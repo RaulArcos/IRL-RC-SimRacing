@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <stdexcept>
 
+// libgpiod v2
 #include <gpiod.h>
 
 // ===================== PCA9685 =====================
@@ -64,7 +65,7 @@ static void setDuty(int fd, uint8_t channel, float duty01)
 
 int main()
 {
-    // ====== EDIT THESE if your wiring differs (BCM GPIO numbers) ======
+    // ===== EDIT ONLY IF YOUR BCM GPIOs DIFFER =====
     constexpr int GPIO_STBY = 23;
     constexpr int GPIO_AIN1 = 24;
     constexpr int GPIO_AIN2 = 25;
@@ -74,23 +75,31 @@ int main()
     const uint8_t PCA_ADDR = 0x40;
 
     try {
-        // ---- GPIO (libgpiod) ----
-        gpiod_chip* chip = gpiod_chip_open_by_name("gpiochip0");
-        if (!chip) throw std::runtime_error("Failed to open gpiochip0");
+        // ---- GPIO (libgpiod v2) ----
+        gpiod_chip* chip = gpiod_chip_open("/dev/gpiochip0");
+        if (!chip) throw std::runtime_error("Failed to open /dev/gpiochip0");
 
-        gpiod_line* stby = gpiod_chip_get_line(chip, GPIO_STBY);
-        gpiod_line* ain1 = gpiod_chip_get_line(chip, GPIO_AIN1);
-        gpiod_line* ain2 = gpiod_chip_get_line(chip, GPIO_AIN2);
-        if (!stby || !ain1 || !ain2) throw std::runtime_error("Failed to get GPIO line(s)");
+        gpiod_line_settings* ls = gpiod_line_settings_new();
+        gpiod_line_config* lc = gpiod_line_config_new();
+        gpiod_request_config* rc = gpiod_request_config_new();
+        if (!ls || !lc || !rc) throw std::runtime_error("Failed to allocate gpiod configs");
 
-        if (gpiod_line_request_output(stby, "pca9685_motor", 0) < 0) throw std::runtime_error("STBY request failed");
-        if (gpiod_line_request_output(ain1, "pca9685_motor", 0) < 0) throw std::runtime_error("AIN1 request failed");
-        if (gpiod_line_request_output(ain2, "pca9685_motor", 0) < 0) throw std::runtime_error("AIN2 request failed");
+        gpiod_line_settings_set_direction(ls, GPIOD_LINE_DIRECTION_OUTPUT);
+        gpiod_line_settings_set_output_value(ls, GPIOD_LINE_VALUE_INACTIVE);
 
-        // Enable TB6612 + forward
-        gpiod_line_set_value(stby, 1);
-        gpiod_line_set_value(ain1, 1);
-        gpiod_line_set_value(ain2, 0);
+        unsigned int offsets[3] = { (unsigned int)GPIO_STBY, (unsigned int)GPIO_AIN1, (unsigned int)GPIO_AIN2 };
+        if (gpiod_line_config_add_line_settings(lc, offsets, 3, ls) < 0)
+            throw std::runtime_error("gpiod_line_config_add_line_settings failed");
+
+        gpiod_request_config_set_consumer(rc, "pca9685_motor");
+
+        gpiod_line_request* req = gpiod_chip_request_lines(chip, rc, lc);
+        if (!req) throw std::runtime_error("gpiod_chip_request_lines failed");
+
+        // STBY=1, AIN1=1, AIN2=0 (forward)
+        gpiod_line_request_set_value(req, GPIO_STBY, GPIOD_LINE_VALUE_ACTIVE);
+        gpiod_line_request_set_value(req, GPIO_AIN1, GPIOD_LINE_VALUE_ACTIVE);
+        gpiod_line_request_set_value(req, GPIO_AIN2, GPIOD_LINE_VALUE_INACTIVE);
 
         // ---- PCA9685 ----
         int fd = open(device, O_RDWR);
@@ -99,16 +108,15 @@ int main()
 
         i2cWrite(fd, MODE2, 0x04);         // OUTDRV
         i2cWrite(fd, MODE1, 0x01 | 0x20);  // ALLCALL + AI
-        setPWMFreq(fd, 1000.0f);          // 1 kHz for motor PWM
+        setPWMFreq(fd, 1000.0f);          // 1 kHz motor PWM
 
         printf("Ramping motor on PCA channel %u...\n", MOTOR_CH);
 
         setDuty(fd, MOTOR_CH, 0.0f);
         usleep(200000);
 
-        // ramp up to 30%
-        for (int i = 0; i <= 60; i++) {
-            float duty = (0.30f * i) / 60.0f;
+        for (int i = 0; i <= 80; i++) {
+            float duty = (0.30f * i) / 80.0f; // up to 30%
             setDuty(fd, MOTOR_CH, duty);
             usleep(40000);
         }
@@ -116,24 +124,24 @@ int main()
         printf("Hold...\n");
         sleep(2);
 
-        // ramp down
-        for (int i = 60; i >= 0; i--) {
-            float duty = (0.30f * i) / 60.0f;
+        for (int i = 80; i >= 0; i--) {
+            float duty = (0.30f * i) / 80.0f;
             setDuty(fd, MOTOR_CH, duty);
             usleep(40000);
         }
 
         setDuty(fd, MOTOR_CH, 0.0f);
 
-        // disable standby
-        gpiod_line_set_value(stby, 0);
+        // Disable STBY
+        gpiod_line_request_set_value(req, GPIO_STBY, GPIOD_LINE_VALUE_INACTIVE);
 
         close(fd);
 
-        // release GPIO
-        gpiod_line_release(stby);
-        gpiod_line_release(ain1);
-        gpiod_line_release(ain2);
+        // cleanup
+        gpiod_line_request_release(req);
+        gpiod_request_config_free(rc);
+        gpiod_line_config_free(lc);
+        gpiod_line_settings_free(ls);
         gpiod_chip_close(chip);
 
         printf("Done.\n");
