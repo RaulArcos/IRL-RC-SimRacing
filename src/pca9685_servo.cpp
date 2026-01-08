@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <stdexcept>
 
-// PCA9685 registers
 constexpr uint8_t MODE1      = 0x00;
 constexpr uint8_t MODE2      = 0x01;
 constexpr uint8_t PRESCALE   = 0xFE;
@@ -43,21 +42,16 @@ static void dumpRegs(int fd, const char* tag)
 
 static void setPWMFreq(int fd, float freqHz)
 {
-    // prescale = round(25MHz / (4096*freq) - 1)
     float prescaleVal = 25000000.0f / (4096.0f * freqHz) - 1.0f;
     uint8_t prescale = static_cast<uint8_t>(std::lround(prescaleVal));
 
     uint8_t oldMode = i2cRead(fd, MODE1);
 
-    // Sleep
     i2cWrite(fd, MODE1, (oldMode & 0x7F) | 0x10);
-    // Set prescale
     i2cWrite(fd, PRESCALE, prescale);
-    // Wake + AI
-    uint8_t wakeMode = (oldMode & ~0x10) | 0x20; // clear SLEEP, set AI
+    uint8_t wakeMode = (oldMode & ~0x10) | 0x20;
     i2cWrite(fd, MODE1, wakeMode);
     usleep(5000);
-    // Restart (optional, but commonly used)
     i2cWrite(fd, MODE1, wakeMode | 0x80);
 }
 
@@ -76,8 +70,6 @@ static void setPWM(int fd, uint8_t channel, uint16_t on, uint16_t off)
 
 static void setServoUS(int fd, uint8_t channel, float us)
 {
-    // 50 Hz => 20,000 us period
-    // ticks = us * 4096 / 20000
     float ticksPerUS = 4096.0f / 20000.0f;
     uint16_t ticks = static_cast<uint16_t>(std::lround(us * ticksPerUS));
     if (ticks > 4095) ticks = 4095;
@@ -102,9 +94,7 @@ int main()
 
         dumpRegs(fd, "BEFORE");
 
-        // Typical servo-friendly output config
-        i2cWrite(fd, MODE2, 0x04); // OUTDRV
-        // MODE1: ALLCALL + AI (we'll also set AI in setPWMFreq)
+        i2cWrite(fd, MODE2, 0x04);
         i2cWrite(fd, MODE1, 0x01 | 0x20);
 
         setPWMFreq(fd, 50.0f);
@@ -112,16 +102,16 @@ int main()
         dumpRegs(fd, "AFTER");
 
         std::printf("Center\n");
-        setServoUS(fd, CHANNEL, 1900); sleep(2);
+        setServoUS(fd, CHANNEL, 1750); sleep(2);
 
         std::printf("Left\n");
-        setServoUS(fd, CHANNEL, 1500); sleep(2);
+        setServoUS(fd, CHANNEL, 1400); sleep(2);
 
         std::printf("Right\n");
-        setServoUS(fd, CHANNEL, 2100); sleep(2);
+        setServoUS(fd, CHANNEL, 2200); sleep(2);
 
         std::printf("Back to center\n");
-        setServoUS(fd, CHANNEL, 1900);
+        setServoUS(fd, CHANNEL, 1750);
 
         close(fd);
         return 0;
