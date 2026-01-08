@@ -282,7 +282,8 @@ def main():
     while True:
         pygame.event.pump()
 
-        steer = wheel.get_axis(wheel_axis)  # [-1..1]
+        steer_raw = wheel.get_axis(wheel_axis)
+        steer = clamp(steer_raw * 5.0, -1.0, 1.0)
         steer_pm = clamp(int(steer * 1000), -1000, 1000)
 
         rep = pedals.get_report()
