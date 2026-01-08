@@ -7,10 +7,8 @@
 #include <cstdint>
 #include <stdexcept>
 
-// libgpiod v2
 #include <gpiod.h>
 
-// ===================== PCA9685 =====================
 constexpr uint8_t MODE1      = 0x00;
 constexpr uint8_t MODE2      = 0x01;
 constexpr uint8_t PRESCALE   = 0xFE;
@@ -37,13 +35,13 @@ static void setPWMFreq(int fd, float freqHz)
 
     uint8_t oldMode = i2cRead(fd, MODE1);
 
-    i2cWrite(fd, MODE1, (oldMode & 0x7F) | 0x10); // sleep
+    i2cWrite(fd, MODE1, (oldMode & 0x7F) | 0x10);
     i2cWrite(fd, PRESCALE, prescale);
 
-    uint8_t wakeMode = (oldMode & ~0x10) | 0x20; // AI
+    uint8_t wakeMode = (oldMode & ~0x10) | 0x20;
     i2cWrite(fd, MODE1, wakeMode);
     usleep(5000);
-    i2cWrite(fd, MODE1, wakeMode | 0x80); // restart
+    i2cWrite(fd, MODE1, wakeMode | 0x80);
 }
 
 static void setPWM(int fd, uint8_t channel, uint16_t on, uint16_t off)
@@ -74,7 +72,6 @@ int main()
     const uint8_t PCA_ADDR = 0x40;
 
     try {
-        // ---- GPIO (libgpiod v2) ----
         gpiod_chip* chip = gpiod_chip_open("/dev/gpiochip0");
         if (!chip) throw std::runtime_error("Failed to open /dev/gpiochip0");
 
@@ -95,19 +92,17 @@ int main()
         gpiod_line_request* req = gpiod_chip_request_lines(chip, rc, lc);
         if (!req) throw std::runtime_error("gpiod_chip_request_lines failed");
 
-        // STBY=1, AIN1=1, AIN2=0 (forward)
         gpiod_line_request_set_value(req, GPIO_STBY, GPIOD_LINE_VALUE_ACTIVE);
         gpiod_line_request_set_value(req, GPIO_AIN1, GPIOD_LINE_VALUE_ACTIVE);
         gpiod_line_request_set_value(req, GPIO_AIN2, GPIOD_LINE_VALUE_INACTIVE);
 
-        // ---- PCA9685 ----
         int fd = open(device, O_RDWR);
         if (fd < 0) { perror("open"); return 1; }
         if (ioctl(fd, I2C_SLAVE, PCA_ADDR) < 0) { perror("ioctl(I2C_SLAVE)"); close(fd); return 1; }
 
-        i2cWrite(fd, MODE2, 0x04);         // OUTDRV
-        i2cWrite(fd, MODE1, 0x01 | 0x20);  // ALLCALL + AI
-        setPWMFreq(fd, 1000.0f);          // 1 kHz motor PWM
+        i2cWrite(fd, MODE2, 0x04);
+        i2cWrite(fd, MODE1, 0x01 | 0x20);
+        setPWMFreq(fd, 1000.0f);
 
         printf("Ramping motor on PCA channel %u...\n", MOTOR_CH);
 
@@ -115,7 +110,7 @@ int main()
         usleep(200000);
 
         for (int i = 0; i <= 80; i++) {
-            float duty = (0.30f * i) / 80.0f; // up to 30%
+            float duty = (0.30f * i) / 80.0f;
             setDuty(fd, MOTOR_CH, duty);
             usleep(40000);
         }
@@ -131,12 +126,10 @@ int main()
 
         setDuty(fd, MOTOR_CH, 0.0f);
 
-        // Disable STBY
         gpiod_line_request_set_value(req, GPIO_STBY, GPIOD_LINE_VALUE_INACTIVE);
 
         close(fd);
 
-        // cleanup
         gpiod_line_request_release(req);
         gpiod_request_config_free(rc);
         gpiod_line_config_free(lc);
