@@ -112,16 +112,16 @@ int main()
         dumpRegs(fd, "AFTER");
 
         std::printf("Center\n");
-        setServoUS(fd, CHANNEL, 1500); sleep(2);
-
-        std::printf("Left\n");
-        setServoUS(fd, CHANNEL, 1100); sleep(2);
-
-        std::printf("Right\n");
         setServoUS(fd, CHANNEL, 1900); sleep(2);
 
+        std::printf("Left\n");
+        setServoUS(fd, CHANNEL, 1500); sleep(2);
+
+        std::printf("Right\n");
+        setServoUS(fd, CHANNEL, 2100); sleep(2);
+
         std::printf("Back to center\n");
-        setServoUS(fd, CHANNEL, 1500);
+        setServoUS(fd, CHANNEL, 1900);
 
         close(fd);
         return 0;
