@@ -121,7 +121,7 @@ int main()
         }
 
         printf("Hold...\n");
-        sleep(2);
+        sleep(30);
 
         for (int i = 80; i >= 0; i--) {
             float duty = (0.30f * i) / 80.0f;
