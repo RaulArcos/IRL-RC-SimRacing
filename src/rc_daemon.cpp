@@ -243,6 +243,9 @@ int main()
                     if (parsePacket(buf, (size_t)n, p)) {
                         lastRxMs = nowMs();
                         enabled = (p.flags & 0x0001) != 0;
+                        
+                        printf("RX: seq=%u, steer=%d, power=%d, flags=0x%04x, enabled=%s\n",
+                               p.seq, p.steer_pm, p.power_pm, p.flags, enabled ? "ON" : "OFF");
 
                         int steer = (int)p.steer_pm;
                         if (steer < -1000) steer = -1000;
