@@ -12,5 +12,7 @@ add_executable(pca9685_motor src/pca9685_motor.cpp)
 
 # Link against math library (required for std::round)
 target_link_libraries(pca9685_servo m)
-target_link_libraries(pca9685_motor m)
+
+# Link against math library and libgpiod (for GPIO control)
+target_link_libraries(pca9685_motor m gpiod)
 

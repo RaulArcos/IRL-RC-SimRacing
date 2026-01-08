@@ -65,10 +65,9 @@ static void setDuty(int fd, uint8_t channel, float duty01)
 
 int main()
 {
-    // ===== EDIT ONLY IF YOUR BCM GPIOs DIFFER =====
-    constexpr int GPIO_STBY = 23;
-    constexpr int GPIO_AIN1 = 24;
-    constexpr int GPIO_AIN2 = 25;
+    constexpr int GPIO_STBY = 25;
+    constexpr int GPIO_AIN1 = 23;
+    constexpr int GPIO_AIN2 = 24;
 
     constexpr uint8_t MOTOR_CH = 4;
     const char* device = "/dev/i2c-1";
