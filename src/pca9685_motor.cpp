@@ -110,7 +110,7 @@ int main()
         usleep(200000);
 
         for (int i = 0; i <= 80; i++) {
-            float duty = (0.30f * i) / 80.0f;
+            float duty = (0.50f * i) / 80.0f;
             setDuty(fd, MOTOR_CH, duty);
             usleep(40000);
         }
@@ -119,7 +119,7 @@ int main()
         sleep(30);
 
         for (int i = 80; i >= 0; i--) {
-            float duty = (0.30f * i) / 80.0f;
+            float duty = (0.50f * i) / 80.0f;
             setDuty(fd, MOTOR_CH, duty);
             usleep(40000);
         }
