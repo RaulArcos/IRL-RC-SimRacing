@@ -6,8 +6,10 @@
 #include <cstdio>
 #include <cstdint>
 #include <stdexcept>
-#include <string>
 
+#include <gpiod.h>
+
+// ===================== PCA9685 =====================
 constexpr uint8_t MODE1      = 0x00;
 constexpr uint8_t MODE2      = 0x01;
 constexpr uint8_t PRESCALE   = 0xFE;
@@ -34,20 +36,17 @@ static void setPWMFreq(int fd, float freqHz)
 
     uint8_t oldMode = i2cRead(fd, MODE1);
 
-    i2cWrite(fd, MODE1, (oldMode & 0x7F) | 0x10);
+    i2cWrite(fd, MODE1, (oldMode & 0x7F) | 0x10); // sleep
     i2cWrite(fd, PRESCALE, prescale);
-    uint8_t wakeMode = (oldMode & ~0x10) | 0x20;
+
+    uint8_t wakeMode = (oldMode & ~0x10) | 0x20; // AI
     i2cWrite(fd, MODE1, wakeMode);
     usleep(5000);
-    i2cWrite(fd, MODE1, wakeMode | 0x80);
+    i2cWrite(fd, MODE1, wakeMode | 0x80); // restart
 }
 
 static void setPWM(int fd, uint8_t channel, uint16_t on, uint16_t off)
 {
-    if (channel > 15) throw std::runtime_error("Invalid PCA channel");
-    if (on >= 4096) on = 4095;
-    if (off >= 4096) off = 4095;
-
     uint8_t reg = LED0_ON_L + 4 * channel;
     i2cWrite(fd, reg + 0, on & 0xFF);
     i2cWrite(fd, reg + 1, on >> 8);
@@ -63,89 +62,61 @@ static void setDuty(int fd, uint8_t channel, float duty01)
     setPWM(fd, channel, 0, off);
 }
 
-static void writeFile(const std::string& path, const std::string& value)
-{
-    int fd = open(path.c_str(), O_WRONLY);
-    if (fd < 0) throw std::runtime_error("Failed to open: " + path);
-    if (write(fd, value.c_str(), value.size()) < 0) {
-        close(fd);
-        throw std::runtime_error("Failed to write: " + path);
-    }
-    close(fd);
-}
-
-static bool existsPath(const std::string& path)
-{
-    return access(path.c_str(), F_OK) == 0;
-}
-
-static void gpioExport(int gpio)
-{
-    if (!existsPath("/sys/class/gpio/gpio" + std::to_string(gpio)))
-        writeFile("/sys/class/gpio/export", std::to_string(gpio));
-}
-
-static void gpioUnexport(int gpio)
-{
-    if (existsPath("/sys/class/gpio/gpio" + std::to_string(gpio)))
-        writeFile("/sys/class/gpio/unexport", std::to_string(gpio));
-}
-
-static void gpioDirOut(int gpio)
-{
-    writeFile("/sys/class/gpio/gpio" + std::to_string(gpio) + "/direction", "out");
-}
-
-static void gpioWrite(int gpio, int value)
-{
-    writeFile("/sys/class/gpio/gpio" + std::to_string(gpio) + "/value", value ? "1" : "0");
-}
-
 int main()
 {
+    // ====== EDIT THESE if your wiring differs (BCM GPIO numbers) ======
     constexpr int GPIO_STBY = 23;
     constexpr int GPIO_AIN1 = 24;
     constexpr int GPIO_AIN2 = 25;
 
     constexpr uint8_t MOTOR_CH = 4;
-
     const char* device = "/dev/i2c-1";
     const uint8_t PCA_ADDR = 0x40;
 
     try {
-        gpioExport(GPIO_STBY);
-        gpioExport(GPIO_AIN1);
-        gpioExport(GPIO_AIN2);
-        gpioDirOut(GPIO_STBY);
-        gpioDirOut(GPIO_AIN1);
-        gpioDirOut(GPIO_AIN2);
+        // ---- GPIO (libgpiod) ----
+        gpiod_chip* chip = gpiod_chip_open_by_name("gpiochip0");
+        if (!chip) throw std::runtime_error("Failed to open gpiochip0");
 
-        gpioWrite(GPIO_STBY, 1);
-        gpioWrite(GPIO_AIN1, 1);
-        gpioWrite(GPIO_AIN2, 0);
+        gpiod_line* stby = gpiod_chip_get_line(chip, GPIO_STBY);
+        gpiod_line* ain1 = gpiod_chip_get_line(chip, GPIO_AIN1);
+        gpiod_line* ain2 = gpiod_chip_get_line(chip, GPIO_AIN2);
+        if (!stby || !ain1 || !ain2) throw std::runtime_error("Failed to get GPIO line(s)");
 
+        if (gpiod_line_request_output(stby, "pca9685_motor", 0) < 0) throw std::runtime_error("STBY request failed");
+        if (gpiod_line_request_output(ain1, "pca9685_motor", 0) < 0) throw std::runtime_error("AIN1 request failed");
+        if (gpiod_line_request_output(ain2, "pca9685_motor", 0) < 0) throw std::runtime_error("AIN2 request failed");
+
+        // Enable TB6612 + forward
+        gpiod_line_set_value(stby, 1);
+        gpiod_line_set_value(ain1, 1);
+        gpiod_line_set_value(ain2, 0);
+
+        // ---- PCA9685 ----
         int fd = open(device, O_RDWR);
         if (fd < 0) { perror("open"); return 1; }
         if (ioctl(fd, I2C_SLAVE, PCA_ADDR) < 0) { perror("ioctl(I2C_SLAVE)"); close(fd); return 1; }
 
-        i2cWrite(fd, MODE2, 0x04);
-        i2cWrite(fd, MODE1, 0x01 | 0x20);
-        setPWMFreq(fd, 1000.0f);
+        i2cWrite(fd, MODE2, 0x04);         // OUTDRV
+        i2cWrite(fd, MODE1, 0x01 | 0x20);  // ALLCALL + AI
+        setPWMFreq(fd, 1000.0f);          // 1 kHz for motor PWM
 
-        std::printf("Ramping motor on PCA channel %u...\n", MOTOR_CH);
+        printf("Ramping motor on PCA channel %u...\n", MOTOR_CH);
 
         setDuty(fd, MOTOR_CH, 0.0f);
         usleep(200000);
 
+        // ramp up to 30%
         for (int i = 0; i <= 60; i++) {
             float duty = (0.30f * i) / 60.0f;
             setDuty(fd, MOTOR_CH, duty);
             usleep(40000);
         }
 
-        std::printf("Hold...\n");
+        printf("Hold...\n");
         sleep(2);
 
+        // ramp down
         for (int i = 60; i >= 0; i--) {
             float duty = (0.30f * i) / 60.0f;
             setDuty(fd, MOTOR_CH, duty);
@@ -153,15 +124,23 @@ int main()
         }
 
         setDuty(fd, MOTOR_CH, 0.0f);
-        gpioWrite(GPIO_STBY, 0);
+
+        // disable standby
+        gpiod_line_set_value(stby, 0);
 
         close(fd);
 
-        std::printf("Done.\n");
+        // release GPIO
+        gpiod_line_release(stby);
+        gpiod_line_release(ain1);
+        gpiod_line_release(ain2);
+        gpiod_chip_close(chip);
+
+        printf("Done.\n");
         return 0;
     }
     catch (const std::exception& e) {
-        std::fprintf(stderr, "Error: %s\n", e.what());
+        fprintf(stderr, "Error: %s\n", e.what());
         return 1;
     }
 }
