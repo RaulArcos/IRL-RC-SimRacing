@@ -41,7 +41,7 @@ constexpr int GPIO_AIN2 = 24;
 
 constexpr uint16_t UDP_PORT = 6001;
 constexpr int FAILSAFE_MS = 250;
-constexpr const char* ALLOWED_PC_IP = "192.168.0.188"; 
+constexpr const char* ALLOWED_PC_IP = "192.168.0.187"; 
 
 static uint64_t nowMs()
 {

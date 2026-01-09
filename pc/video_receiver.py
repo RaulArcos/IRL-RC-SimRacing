@@ -1,33 +1,21 @@
+import av
 import cv2
-import time
 
-URL = "udp://@0.0.0.0:5600?fifo_size=500000&overrun_nonfatal=1"
+url = "udp://0.0.0.0:5600?listen=1&localaddr=0.0.0.0&overrun_nonfatal=1&fifo_size=50000"
 
-cap = cv2.VideoCapture(URL, cv2.CAP_FFMPEG)
-if not cap.isOpened():
-    raise SystemExit("Could not open UDP video stream. Check firewall, port, sender IP.")
+opts = {
+    "fflags": "nobuffer",
+    "flags": "low_delay",
+    "flush_packets": "1",
+    "probesize": "32",
+    "analyzeduration": "0",
+}
 
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+print("Opening:", url)
+container = av.open(url, format="mpegts", options=opts)
 
-last = time.time()
-frames = 0
-
-while True:
-    ok, frame = cap.read()
-    if not ok:
-        time.sleep(0.01)
-        continue
-
-    frames += 1
-    now = time.time()
-    if now - last >= 1.0:
-        print(f"FPS: {frames}")
-        frames = 0
-        last = now
-
-    cv2.imshow("RC Cam", frame)
-    if cv2.waitKey(1) & 0xFF == 27:  # ESC
+for frame in container.decode(video=0):
+    img = frame.to_ndarray(format="bgr24")
+    cv2.imshow("RC Cam", img)
+    if cv2.waitKey(1) == 27:
         break
-
-cap.release()
-cv2.destroyAllWindows()
