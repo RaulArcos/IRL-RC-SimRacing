@@ -1,6 +1,6 @@
 import os
 os.environ["SDL_JOYSTICK_RAWINPUT"] = "1"
-os.environ["SDL_JOYSTICK_HIDAPI"] = "1"  # if needed, try "0"
+os.environ["SDL_JOYSTICK_HIDAPI"] = "1"
 
 import socket
 import struct
@@ -20,7 +20,6 @@ PKT_FMT = "!4sIhhHH"
 def clamp(x, lo, hi):
     return lo if x < lo else hi if x > hi else x
 
-# -------------------- HID helpers --------------------
 def axis16_le(report, idx):
     if report is None or idx + 1 >= len(report):
         return 0
@@ -67,7 +66,6 @@ class HidPedals:
         except:
             pass
 
-# -------------------- pygame helpers --------------------
 def list_pygame_devices():
     pygame.joystick.init()
     count = pygame.joystick.get_count()
@@ -92,14 +90,12 @@ def pick_int(prompt, lo, hi):
         except KeyboardInterrupt:
             sys.exit(0)
 
-# -------------------- config.ini --------------------
 def load_config():
     cfg = configparser.ConfigParser()
     if not os.path.exists(CONFIG_PATH):
         return None
     cfg.read(CONFIG_PATH, encoding="utf-8")
 
-    # Basic validation
     if "network" not in cfg or "wheel" not in cfg or "pedals" not in cfg:
         return None
 
@@ -110,7 +106,6 @@ def save_config(cfg: configparser.ConfigParser):
         cfg.write(f)
     print(f"\nSaved configuration to {CONFIG_PATH}")
 
-# -------------------- guided setup --------------------
 def guided_setup(pygame_devs):
     cfg = configparser.ConfigParser()
 
@@ -142,7 +137,6 @@ def guided_setup(pygame_devs):
             candidates.append(d)
 
     if not candidates:
-        # Fallback: show all
         candidates = [d for d in devs if d.product_name]
 
     for i, d in enumerate(candidates):
@@ -152,14 +146,12 @@ def guided_setup(pygame_devs):
     pedals_dev = candidates[idx]
     print(f"Selected pedals: {pedals_dev.product_name}")
 
-    # open pedals
     pedals_dev.open()
     last_report = {"data": None}
     def on_data(data):
         last_report["data"] = data
     pedals_dev.set_raw_data_handler(on_data)
 
-    # Wait for first report
     print("Waiting for pedal HID reports...")
     t0 = time.time()
     while last_report["data"] is None and time.time() - t0 < 3.0:
@@ -170,7 +162,6 @@ def guided_setup(pygame_devs):
 
     baseline = last_report["data"]
 
-    print("\nMapping bytes that move (helps you pick correct indices).")
     input("Press Enter, then press/release THROTTLE for ~3 seconds...")
     thr_moves = set()
     t0 = time.time()
@@ -194,7 +185,6 @@ def guided_setup(pygame_devs):
         time.sleep(0.01)
     print("Brake moving indices:", sorted(brk_moves))
 
-    print("\nPick LOW-byte indices for each 16-bit axis (little-endian).")
     thr_lo = int(input("Throttle LOW byte index: ").strip())
     brk_lo = int(input("Brake LOW byte index: ").strip())
 
@@ -229,10 +219,9 @@ def guided_setup(pygame_devs):
         "brk_max": str(brk_max),
     }
 
-    save_config(cfg)
+        save_config(cfg)
     return cfg
 
-# -------------------- main loop --------------------
 def main():
     pygame.init()
     pygame.joystick.init()

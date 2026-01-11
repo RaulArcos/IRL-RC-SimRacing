@@ -130,7 +130,7 @@ struct Packet
 
 static bool parsePacket(const uint8_t* buf, size_t len, Packet& out)
 {
-    if (len != sizeof(Packet)) return false;         // exactly 16 bytes
+    if (len != sizeof(Packet)) return false;
     std::memcpy(&out, buf, sizeof(Packet));
     if (std::memcmp(out.magic, "IRL1", 4) != 0) return false;
 
@@ -237,7 +237,7 @@ int main()
                     char srcIp[INET_ADDRSTRLEN]{};
                     inet_ntop(AF_INET, &src.sin_addr, srcIp, sizeof(srcIp));
                     if (std::strcmp(srcIp, ALLOWED_PC_IP) != 0) {
-                        continue; // ignore unknown senders
+                        continue;
                     }
                     Packet p{};
                     if (parsePacket(buf, (size_t)n, p)) {

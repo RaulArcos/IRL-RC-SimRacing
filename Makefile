@@ -5,7 +5,6 @@ CXXFLAGS_DAEMON = -std=c++17 -Wall -Wextra
 LDFLAGS = -lm
 GPIO_LIBS = -lgpiod
 
-# GStreamer (used only by video_sender)
 GST_CFLAGS = $(shell pkg-config --cflags gstreamer-1.0 gstreamer-base-1.0 glib-2.0)
 GST_LIBS   = $(shell pkg-config --libs   gstreamer-1.0 gstreamer-base-1.0 glib-2.0)
 
